@@ -8,6 +8,8 @@
 #define AKS_TRANSLATE_MAIN
 #include "aksmacro.h"
 
+#include "aksview.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -143,11 +145,41 @@ static int verb_require(const char *pPath) {
 }
 
 /*
- * @@TODO:
+ * Verb to create a new, empty file.
+ * 
+ * Parameters:
+ * 
+ *   pPath - the path to the file
+ * 
+ * Return:
+ * 
+ *   non-zero if successful, zero if error
  */
 static int verb_new(const char *pPath) {
-  fprintf(stderr, "verb_new %s\n", pPath);
-  return 1;
+  
+  int status = 1;
+  int errcode = 0;
+  AKSVIEW *pv = NULL;
+  
+  /* Check parameter */
+  if (pPath == NULL) {
+    fault(__LINE__);
+  }
+  
+  /* Open a view in exclusive mode to create a new file without
+   * overwriting any existing file */
+  pv = aksview_create(pPath, AKSVIEW_EXCLUSIVE, &errcode);
+  if (pv == NULL) {
+    status = 0;
+    fprintf(stderr, "%s: Failed to open file: %s\n",
+              pModule, aksview_errstr(errcode));
+  }
+  
+  /* Close viewer if open */
+  aksview_close(pv);
+  
+  /* Return status */
+  return status;
 }
 
 /*
