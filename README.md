@@ -29,6 +29,8 @@ The following are the invocation syntax styles for Binpoke:
     binpoke write [path] at [addr] as [type] with [value]
     binpoke query [path]
     binpoke resize [path] with [count]
+    binpoke require [path]
+    binpoke new [path]
 
 The first parameter after the executable name must always be a _verb_ (`list` `read` `write` `query` `resize`) followed by `[path]`, which is the path to the binary file.  After the verb and path comes a sequence of one or more _phrases_.  Each phrase consists of a _preposition_ (`from` `for` `at` `as` `with`) followed by a _nominal_, which provides some kind of parameter value for the operation.  The invocation syntax list shown above defines exactly which phrases are required for each verb.  The phrases can be given in any order so long as the verb and path are first.
 
@@ -65,3 +67,21 @@ Binpoke always uses two's-complement format for signed integers.
 The `[value]` nominal defines an integer value to write into the file.  If the value begins with a `-` or `+` sign then this sign must be followed by a sequence of decimal digits.  If the value begins with a `0x` or `0X` prefix (zero, not the letter O), then this prefix must be followed by a sequence of base-16 digits.  Otherwise, the value must be a sequence of decimal digits, which is equivalent to a value with a `+` sign in front of it.
 
 Values given without any sign or prefix may be used with any type.  Values given with a `+` sign may also be used with any type.  Values given with a `-` sign may only be used with signed types.  Values given with a `0x` or `0X` prefix may be used with any type; however, if they are used with a signed type, Binpoke will act instead as if you provided the corresponding unsigned type (if you want a negative value in base-16, you must encode it in two's-complement yourself).
+
+## Operation
+
+The `list` verb will list a selected sequence of one or more bytes from within the binary file.  Each line in the listing has the following format:
+
+    000023A0: 00 01 48 65 6c 6c 6f 20   77 6f 72 6c 64 21 fe fe | ..Hello world!..
+
+The first field on each line is the file offset of first byte on the line, given in base-16.  A file offset of zero is the first byte in the file, a file offset of one is the second byte, and so forth.  Each line in the listing is always aligned to a 16-byte boundary, so the last digit of the base-16 address at the start of each line will always be zero.  If you are dealing with binary files of length greater than 4GB, then the first field will only be the 32 least significant bits of the address.
+
+After the address field follows 16 unsigned byte values, each represented as two base-16 digits.  Single spaces are used to separate bytes, except that between the eighth and ninth bytes there is a larger gap of three spaces.  If the range of bytes chosen for listing does not cover the full 16-byte line in a listing, the missing byte values are replaced by two spaces.
+
+The final field on the line is eight characters that give the US-ASCII interpretation of each byte value in the line.  Only byte values in printing range [0x20, 0x7E] will be displayed as ASCII characters; all other byte values will be replaced by a period character in the display.  (The period character is ambiguous, meaning either a byte value that is out of printing ASCII range or a byte value corresponding to the ASCII character for a period.)  If the range of bytes chosen for listing does not cover the full 16-byte line in a listing, the missing byte values are replaced by a space character in the character listing.
+
+The `read` and `write` verbs allow you to read and write individual integer values within the file.  All component bytes of chosen integer locations must be within the file limits.  Resize the file first if you need to write an integer value beyond the current end of the file.
+
+The `query` and `resize` verbs allow you to determine the current length in bytes of a file and change the current length in bytes of a file.
+
+All verbs discussed so far require the indicated binary file to already exist.  The `require` verb, on the other hand, will do nothing if the binary file already exists and otherwise create a new binary file of length zero if the binary file does not already exist.  Finally, the `new` verb will create a new binary file of length zero, failing if the binary file already exists.
