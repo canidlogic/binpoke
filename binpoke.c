@@ -44,6 +44,7 @@ const char *pModule = NULL;
 
 /* Prototypes */
 static void fault(int line);
+static void printInt64(int64_t v);
 
 static int verb_list(
     const char *pPath,
@@ -86,6 +87,47 @@ static void fault(int line) {
 }
 
 /*
+ * Print a signed 64-bit integer value in decimal to standard output.
+ * 
+ * Parameters:
+ * 
+ *   v - the integer value to print
+ */
+static void printInt64(int64_t v) {
+  
+  /* Handle the different cases */
+  if (v <= INT64_MIN) {
+    /* Special case of the least negative value -- this integer value
+     * has no positive equivalent due to the way two's complement works,
+     * so just print its value as a special case */
+    printf("-9223372036854775808");
+    
+  } else if ((v > INT64_MIN) && (v < 0)) {
+    /* If we have a negative value besides the least negative value that
+     * we just handled as a special case, print a negative sign and then
+     * recursively print the positive value */
+    putchar('-');
+    printInt64(0 - v);
+    
+  } else if (v >= 10) {
+    /* If value is positive and has more than one digit, first
+     * recursively print the value except for the last digit */
+    printInt64(v / 10);
+    
+    /* Finally, print the last digit */
+    putchar(((int) (v % 10)) + '0');
+    
+  } else if ((v >= 0) && (v < 10)) {
+    /* If value is positive and has one digit, just print the digit */
+    putchar(((int) v) + '0');
+    
+  } else {
+    /* Shouldn't happen */
+    fault(__LINE__);
+  }
+}
+
+/*
  * @@TODO:
  */
 static int verb_list(
@@ -121,11 +163,48 @@ static int verb_write(
 }
 
 /*
- * @@TODO:
+ * Verb to report the file size of an existing file.
+ * 
+ * Parameters:
+ * 
+ *   pPath - the path to the file
+ * 
+ * Return:
+ * 
+ *   non-zero if successful, zero if error
  */
 static int verb_query(const char *pPath) {
-  fprintf(stderr, "verb_query %s\n", pPath);
-  return 1;
+  
+  int status = 1;
+  int errcode = 0;
+  int64_t fl = 0;
+  AKSVIEW *pv = NULL;
+  
+  /* Check parameter */
+  if (pPath == NULL) {
+    fault(__LINE__);
+  }
+  
+  /* Open a read-only view */
+  pv = aksview_create(pPath, AKSVIEW_READONLY, &errcode);
+  if (pv == NULL) {
+    status = 0;
+    fprintf(stderr, "%s: Failed to open file: %s\n",
+              pModule, aksview_errstr(errcode));
+  }
+  
+  /* Print the file length */
+  if (status) {
+    printf("File length: ");
+    printInt64(aksview_getlen(pv));
+    printf("\n");
+  }
+  
+  /* Close viewer if open */
+  aksview_close(pv);
+  
+  /* Return status */
+  return status;
 }
 
 /*
@@ -137,11 +216,42 @@ static int verb_resize(const char *pPath, const char *pWith) {
 }
 
 /*
- * @@TODO:
+ * Verb to create a new, empty file or do nothing if file already
+ * exists.
+ * 
+ * Parameters:
+ * 
+ *   pPath - the path to the file
+ * 
+ * Return:
+ * 
+ *   non-zero if successful, zero if error
  */
 static int verb_require(const char *pPath) {
-  fprintf(stderr, "verb_require %s\n", pPath);
-  return 1;
+  
+  int status = 1;
+  int errcode = 0;
+  AKSVIEW *pv = NULL;
+  
+  /* Check parameter */
+  if (pPath == NULL) {
+    fault(__LINE__);
+  }
+  
+  /* Open a view in regular mode to create a new file if one doesn't
+   * exist otherwise open existing file */
+  pv = aksview_create(pPath, AKSVIEW_REGULAR, &errcode);
+  if (pv == NULL) {
+    status = 0;
+    fprintf(stderr, "%s: Failed to open file: %s\n",
+              pModule, aksview_errstr(errcode));
+  }
+  
+  /* Close viewer if open */
+  aksview_close(pv);
+  
+  /* Return status */
+  return status;
 }
 
 /*
