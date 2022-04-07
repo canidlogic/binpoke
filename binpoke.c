@@ -46,6 +46,8 @@ const char *pModule = NULL;
 static void fault(int line);
 static void printInt64(int64_t v);
 
+static int64_t parseCount(const char *pstr);
+
 static int verb_list(
     const char *pPath,
     const char *pFrom,
@@ -125,6 +127,76 @@ static void printInt64(int64_t v) {
     /* Shouldn't happen */
     fault(__LINE__);
   }
+}
+
+/*
+ * Parse a 64-bit count parameter from a given string.
+ * 
+ * These strings are unsigned decimal strings that must be in range of
+ * int64_t.  -1 is returned if there is a parsing error.
+ * 
+ * Parameters:
+ * 
+ *   pstr - the string to parse
+ * 
+ * Return:
+ * 
+ *   the unsigned count value, or -1 if parsing error
+ */
+static int64_t parseCount(const char *pstr) {
+  
+  int64_t result = 0;
+  
+  /* Check parameter */
+  if (pstr == NULL) {
+    fault(__LINE__);
+  }
+  
+  /* Fail if empty string */
+  if (*pstr == 0) {
+    result = -1;
+  }
+  
+  /* Skip any leading zeros */
+  if (result >= 0) {
+    for( ; *pstr == '0'; pstr++);
+  }
+  
+  /* Parse any remaining digits */
+  if (result >= 0) {
+    for( ; *pstr != 0; pstr++) {
+      /* Check that digit is valid */
+      if ((*pstr < '0') || (*pstr > '9')) {
+        result = -1;
+      }
+      
+      /* Multiply result by ten, failing if overflow */
+      if (result >= 0) {
+        if (result <= INT64_MAX / 10) {
+          result *= 10;
+        } else {
+          result = -1;
+        }
+      }
+      
+      /* Add new digit into result, failing if overflow */
+      if (result >= 0) {
+        if (result <= INT64_MAX - (*pstr - '0')) {
+          result += (*pstr - '0');
+        } else {
+          result = -1;
+        }
+      }
+      
+      /* Leave loop if error */
+      if (result < 0) {
+        break;
+      }
+    }
+  }
+  
+  /* Return result or -1 */
+  return result;
 }
 
 /*
@@ -208,11 +280,63 @@ static int verb_query(const char *pPath) {
 }
 
 /*
- * @@TODO:
+ * Verb to resize an existing file.
+ * 
+ * Parameters:
+ * 
+ *   pPath - the path to the file
+ * 
+ *   pWith - string parameter containing the new length
  */
 static int verb_resize(const char *pPath, const char *pWith) {
-  fprintf(stderr, "verb_resize %s with %s\n", pPath, pWith);
-  return 1;
+  
+  int status = 1;
+  int errcode = 0;
+  int64_t fl = 0;
+  AKSVIEW *pv = NULL;
+  
+  /* Check parameters */
+  if ((pPath == NULL) || (pWith == NULL)) {
+    fault(__LINE__);
+  }
+  
+  /* Parse the desired new file length */
+  fl = parseCount(pWith);
+  if (fl < 0) {
+    status = 0;
+    fprintf(stderr, "%s: Failed to parse count: %s\n",
+              pModule, pWith);
+  }
+  
+  /* Make sure file length doesn't exceed aksview limit */
+  if (status && (fl > AKSVIEW_MAXLEN)) {
+    status = 0;
+    fprintf(stderr, "%s: Length exceeded AKSVIEW_MAXLEN!\n", pModule);
+  }
+  
+  /* Open a read-write view */
+  if (status) {
+    pv = aksview_create(pPath, AKSVIEW_EXISTING, &errcode);
+    if (pv == NULL) {
+      status = 0;
+      fprintf(stderr, "%s: Failed to open file: %s\n",
+                pModule, aksview_errstr(errcode));
+    }
+  }
+  
+  /* Set the file length */
+  if (status) {
+    if (!aksview_setlen(pv, fl)) {
+      status = 0;
+      fprintf(stderr, "%s: Failed to set length on file!\n", pModule);
+    }
+  }
+  
+  /* Close viewer if open */
+  aksview_close(pv);
+  
+  /* Return status */
+  return status;
 }
 
 /*
